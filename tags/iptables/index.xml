@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>Shu Meng Hui&#39;s Blog</title>
-    <link>https://polefishu.github.io/</link>
-    <description>Recent content on Shu Meng Hui&#39;s Blog</description>
+    <title>iptables on Shu Meng Hui&#39;s Blog</title>
+    <link>https://polefishu.github.io/tags/iptables/</link>
+    <description>Recent content in iptables on Shu Meng Hui&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
     <copyright>&lt;a href=&#34;https://creativecommons.org/licenses/by-nc/4.0/&#34; target=&#34;_blank&#34; rel=&#34;noopener&#34;&gt;CC BY-NC 4.0&lt;/a&gt;</copyright>
-    <lastBuildDate>Fri, 14 Oct 2022 19:49:08 +0800</lastBuildDate><atom:link href="https://polefishu.github.io/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Fri, 14 Oct 2022 19:49:08 +0800</lastBuildDate><atom:link href="https://polefishu.github.io/tags/iptables/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>iptables MASQUERADE 如何选择源IP</title>
       <link>https://polefishu.github.io/posts/net/2022-10-14-masquerade/</link>
@@ -19,15 +19,6 @@
 SNAT target 这个 target 是用来做源网络地址转换的，就是重写包的源 IP 地址。那么什么时候会用到这个 target 呢，一般在共享公网地址时使用，即主机访问公网时，通过 SNAT 规则将从本地出去的包的源地址改为 Internet 地址(主机在内网通信时的源地址通常是内网地址，不可在 Internet 上路由)，这样从公网的回包才能送回主机。
 SNAT 只能用在 nat 表的 POSTROUTING 链里。
 Option &amp;ndash;to-source Example iptables -t nat -A POSTROUTING -p tcp -o eth0 -j SNAT &amp;ndash;to-source 194.236.50.155-194.236.50.160:1024-32000 Explanation 指定源地址和端口，有以下几种方式：1、单独的地址。2、一段连续的地址，用连字符分隔，如194.236.50.155-194.236.50.160，这样可以实现负载平衡。每个流会被随机分配一个 IP，但对于同一个流使用的是同一个 IP。3、在指定 -p tcp 或 -p udp 的前提下，可以指定源端口的范围，如194.236.50.155:1024-32000，这样包的源端口就被限制在1024-32000了。注意，如果可能，iptables 总是想避免任何的端口变更，换句话说，它总是尽力使用建立连接时所用的端口。但是如果两台机子使用相同的源端口，iptables 将会把他们的其中之一映射到另外的一个端口。如果没有指定端口范围， 所有的在512以内的源端口会被映射到512以内的另一个端口，512和1023之间的将会被映射到 1024内，其他的将会被映射到大于或对于1024的端口，也就是说是同范围映射。还要注意，这种映射和目的端口无关。 MASQUERADE target MASQUERADE 的作用和 SNAT 一样，区别是它不需要指定 &amp;ndash;to-source。MASQUERADE 专门用于动态获取IP地址的连接，比如，拨号上网、DHCP连接等。 MASQUERADE（伪装）会自动获取网卡上的 IP 地址，而不用像 SNAT 那样需要使用 &amp;ndash;to-source 指定，当 IP 发生变化时不需要手动改动。当网卡 down 掉时，MASQUERADE 不会保留任何相关的 conntrack 记录，如果我们使用 SNAT target，conntrack 记录是被保留下来的，直到被超时 GC，这会占用很多连接跟踪的内存。</description>
-    </item>
-    
-    <item>
-      <title>About</title>
-      <link>https://polefishu.github.io/about/</link>
-      <pubDate>Sat, 18 Jun 2022 22:55:45 +0800</pubDate>
-      
-      <guid>https://polefishu.github.io/about/</guid>
-      <description>野路子程序员，不太专业的 Kubernetes/Network 工程师，现在腾讯云。刚入得程序大门。发现自己想研究的东西太多，这个网站用来记录自己的所学所想，希望对你有所帮助。</description>
     </item>
     
   </channel>

@@ -6,6 +6,34 @@
     <description>Recent content in Tags on Shu Meng Hui&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <copyright>&lt;a href=&#34;https://creativecommons.org/licenses/by-nc/4.0/&#34; target=&#34;_blank&#34; rel=&#34;noopener&#34;&gt;CC BY-NC 4.0&lt;/a&gt;</copyright><atom:link href="https://polefishu.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
+    <copyright>&lt;a href=&#34;https://creativecommons.org/licenses/by-nc/4.0/&#34; target=&#34;_blank&#34; rel=&#34;noopener&#34;&gt;CC BY-NC 4.0&lt;/a&gt;</copyright>
+    <lastBuildDate>Fri, 14 Oct 2022 19:49:08 +0800</lastBuildDate><atom:link href="https://polefishu.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>iptables</title>
+      <link>https://polefishu.github.io/tags/iptables/</link>
+      <pubDate>Fri, 14 Oct 2022 19:49:08 +0800</pubDate>
+      
+      <guid>https://polefishu.github.io/tags/iptables/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>net</title>
+      <link>https://polefishu.github.io/tags/net/</link>
+      <pubDate>Fri, 14 Oct 2022 19:49:08 +0800</pubDate>
+      
+      <guid>https://polefishu.github.io/tags/net/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>netfilter</title>
+      <link>https://polefishu.github.io/tags/netfilter/</link>
+      <pubDate>Fri, 14 Oct 2022 19:49:08 +0800</pubDate>
+      
+      <guid>https://polefishu.github.io/tags/netfilter/</guid>
+      <description></description>
+    </item>
+    
   </channel>
 </rss>

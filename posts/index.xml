@@ -1,0 +1,335 @@
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Posts on Shu Meng Hui&#39;s Blog</title>
+        <link>https://polefishu.github.io/posts/</link>
+        <description>Recent content in Posts on Shu Meng Hui&#39;s Blog</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en-us</language>
+        <copyright>&lt;a href=&#34;https://creativecommons.org/licenses/by-nc/4.0/&#34; target=&#34;_blank&#34; rel=&#34;noopener&#34;&gt;CC BY-NC 4.0&lt;/a&gt;</copyright>
+        <lastBuildDate>Fri, 14 Oct 2022 19:49:08 +0800</lastBuildDate>
+        <atom:link href="https://polefishu.github.io/posts/index.xml" rel="self" type="application/rss+xml" />
+        
+        <item>
+            <title>iptables MASQUERADE 如何选择源IP</title>
+            <link>https://polefishu.github.io/posts/net/2022-10-14-masquerade/</link>
+            <pubDate>Fri, 14 Oct 2022 19:49:08 +0800</pubDate>
+            
+            <guid>https://polefishu.github.io/posts/net/2022-10-14-masquerade/</guid>
+            <description>本文重点介绍 iptables MASQUERADE 动作实现原理，需要读者具备 iptables 一些基础知识。iptables 的基础知识请翻阅 Iptables 指南 1.1.19。
+在讲 MASQUERADE 之前，先说 iptables 的另一个动作：SNAT，如果你对这个动作比较熟悉可以直接略过。
+SNAT target 这个 target 是用来做源网络地址转换的，就是重写包的源 IP 地址。那么什么时候会用到这个 target 呢，一般在共享公网地址时使用，即主机访问公网时，通过 SNAT 规则将从本地出去的包的源地址改为 Internet 地址(主机在内网通信时的源地址通常是内网地址，不可在 Internet 上路由)，这样从公网的回包才能送回主机。
+SNAT 只能用在 nat 表的 POSTROUTING 链里。
+Option &amp;ndash;to-source Example iptables -t nat -A POSTROUTING -p tcp -o eth0 -j SNAT &amp;ndash;to-source 194.236.50.155-194.236.50.160:1024-32000 Explanation 指定源地址和端口，有以下几种方式：1、单独的地址。2、一段连续的地址，用连字符分隔，如194.236.50.155-194.236.50.160，这样可以实现负载平衡。每个流会被随机分配一个 IP，但对于同一个流使用的是同一个 IP。3、在指定 -p tcp 或 -p udp 的前提下，可以指定源端口的范围，如194.236.50.155:1024-32000，这样包的源端口就被限制在1024-32000了。注意，如果可能，iptables 总是想避免任何的端口变更，换句话说，它总是尽力使用建立连接时所用的端口。但是如果两台机子使用相同的源端口，iptables 将会把他们的其中之一映射到另外的一个端口。如果没有指定端口范围， 所有的在512以内的源端口会被映射到512以内的另一个端口，512和1023之间的将会被映射到 1024内，其他的将会被映射到大于或对于1024的端口，也就是说是同范围映射。还要注意，这种映射和目的端口无关。 MASQUERADE target MASQUERADE 的作用和 SNAT 一样，区别是它不需要指定 &amp;ndash;to-source。MASQUERADE 专门用于动态获取IP地址的连接，比如，拨号上网、DHCP连接等。 MASQUERADE（伪装）会自动获取网卡上的 IP 地址，而不用像 SNAT 那样需要使用 &amp;ndash;to-source 指定，当 IP 发生变化时不需要手动改动。当网卡 down 掉时，MASQUERADE 不会保留任何相关的 conntrack 记录，如果我们使用 SNAT target，conntrack 记录是被保留下来的，直到被超时 GC，这会占用很多连接跟踪的内存。</description>
+            <content type="html"><![CDATA[<p>本文重点介绍 iptables MASQUERADE 动作实现原理，需要读者具备 iptables 一些基础知识。iptables 的基础知识请翻阅 <a href="https://www.frozentux.net/iptables-tutorial/cn/iptables-tutorial-cn-1.1.19.html">Iptables 指南 1.1.19</a>。</p>
+<p>在讲 MASQUERADE 之前，先说 iptables 的另一个动作：SNAT，如果你对这个动作比较熟悉可以直接略过。</p>
+<h2 id="snat-target">SNAT target</h2>
+<p>这个 target 是用来做源网络地址转换的，就是重写包的源 IP 地址。那么什么时候会用到这个 target 呢，一般在共享公网地址时使用，即主机访问公网时，通过 SNAT 规则将从本地出去的包的源地址改为 Internet 地址(主机在内网通信时的源地址通常是内网地址，不可在 Internet 上路由)，这样从公网的回包才能送回主机。</p>
+<p>SNAT 只能用在 nat 表的 POSTROUTING 链里。</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>&ndash;to-source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Example</td>
+<td>iptables -t nat -A POSTROUTING -p tcp -o eth0 -j SNAT &ndash;to-source 194.236.50.155-194.236.50.160:1024-32000</td>
+</tr>
+<tr>
+<td>Explanation</td>
+<td>指定源地址和端口，有以下几种方式：<!-- raw HTML omitted -->1、单独的地址。<!-- raw HTML omitted -->2、一段连续的地址，用连字符分隔，如194.236.50.155-194.236.50.160，这样可以实现负载平衡。每个流会被随机分配一个 IP，但对于同一个流使用的是同一个 IP。<!-- raw HTML omitted -->3、在指定 -p tcp 或 -p udp 的前提下，可以指定源端口的范围，如194.236.50.155:1024-32000，这样包的源端口就被限制在1024-32000了。<!-- raw HTML omitted -->注意，如果可能，iptables 总是想避免任何的端口变更，换句话说，它总是尽力使用建立连接时所用的端口。但是如果两台机子使用相同的源端口，iptables 将会把他们的其中之一映射到另外的一个端口。如果没有指定端口范围， 所有的在512以内的源端口会被映射到512以内的另一个端口，512和1023之间的将会被映射到 1024内，其他的将会被映射到大于或对于1024的端口，也就是说是同范围映射。还要注意，这种映射和目的端口无关。</td>
+</tr>
+</tbody>
+</table>
+<h2 id="masquerade-target">MASQUERADE target</h2>
+<p>MASQUERADE 的作用和 SNAT 一样，区别是它不需要指定 &ndash;to-source。MASQUERADE 专门用于动态获取IP地址的连接，比如，拨号上网、DHCP连接等。
+MASQUERADE（伪装）会自动获取网卡上的 IP 地址，而不用像 SNAT 那样需要使用 &ndash;to-source 指定，当 IP 发生变化时不需要手动改动。当网卡 down 掉时，MASQUERADE 不会保留任何相关的 conntrack 记录，如果我们使用 SNAT target，conntrack 记录是被保留下来的，直到被超时 GC，这会占用很多连接跟踪的内存。</p>
+<p>注意，MASQUERADE 和 SNAT一样，只能用于 nat 表的 POSTROUTING链。</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>&ndash;to-ports</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Example</td>
+<td>iptables -t nat -A POSTROUTING -p TCP -j MASQUERADE &ndash;to-ports 1024-31000</td>
+</tr>
+<tr>
+<td>Explanation</td>
+<td>在指定TCP或UDP的前提下，设置外出包能使用的端口，设置单个端口：&ndash;to-ports 1025，或者是端口范围：&ndash;to-ports 1024-3000</td>
+</tr>
+</tbody>
+</table>
+<h2 id="masquerade-如何选择源-ip">MASQUERADE 如何选择源 IP</h2>
+<p>前面聊了 MASQUERADE 的作用，现在终于到了本文的重点，当主机上配置多个 IP 地址时，MASQUERADE 如何从这些 IP 地址中选出一个合适的源 IP。</p>
+<p>考虑如下环境：
+机器 IP 配置如下：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu <span style="color:#ae81ff">65536</span> qdisc noqueue state UNKNOWN group default qlen <span style="color:#ae81ff">1000</span>
+</span></span><span style="display:flex;"><span>    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+</span></span><span style="display:flex;"><span>    inet 127.0.0.1/8 scope host lo
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>    inet6 ::1/128 scope host 
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>2: eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu <span style="color:#ae81ff">1500</span> xdp qdisc mq state UP group default qlen <span style="color:#ae81ff">1000</span>
+</span></span><span style="display:flex;"><span>    link/ether 52:54:00:91:a0:be brd ff:ff:ff:ff:ff:ff
+</span></span><span style="display:flex;"><span>    inet 10.0.10.13/24 brd 10.0.10.255 scope global eth0
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>    inet 10.0.10.14/24 scope global secondary eth0
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>    inet6 fe80::5054:ff:fe91:a0be/64 scope link 
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>3: docker0: &lt;BROADCAST,MULTICAST,NOARP,UP,LOWER_UP&gt; mtu <span style="color:#ae81ff">1500</span> qdisc noqueue state UP group default qlen <span style="color:#ae81ff">1000</span>
+</span></span><span style="display:flex;"><span>    link/ether 5e:88:9f:6d:a7:2b brd ff:ff:ff:ff:ff:ff
+</span></span><span style="display:flex;"><span>    inet 192.168.1.101/32 scope link docker0
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>    inet6 fe80::5c88:9fff:fe6d:a72b/64 scope link 
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span></code></pre></div><p>路由如下：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>default via 10.0.10.1 dev eth0
+</span></span><span style="display:flex;"><span>10.0.10.0/24 dev eth0 proto kernel scope link src 10.0.10.13
+</span></span><span style="display:flex;"><span>192.168.0.0/24 via 192.168.1.101 dev docker0 src 192.168.1.101
+</span></span><span style="display:flex;"><span>192.168.1.101 dev docker0 scope link
+</span></span></code></pre></div><p>配置了 MASQUERADE 规则：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>iptables -t nat -A POSTROUTING -j MASQUERADE
+</span></span></code></pre></div><p>如上所示，机器 eth0 Interface 上配置了 10.0.10.13/24, 10.0.10.14/24 两个地址，docker0 上配置了 192.168.1.101/32 地址。</p>
+<p>问题1: 在机器上访问 10.0.10.15 时，MASQUERADE 选择的源 IP 是哪个？(10.0.10.13? 10.0.10.14? 192.168.1.101?)</p>
+<p>问题2: 在机器上访问 192.168.0.2 时，MASQUERADE 选择的源 IP 是哪个？(10.0.10.13? 10.0.10.14? 192.168.1.101?)</p>
+<p>更改 docker0 IP 地址的 scope，从 link 改为 global：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>3: docker0: &lt;BROADCAST,MULTICAST,NOARP,UP,LOWER_UP&gt; mtu <span style="color:#ae81ff">1500</span> qdisc noqueue state UP group default qlen <span style="color:#ae81ff">1000</span>
+</span></span><span style="display:flex;"><span>    link/ether 5e:88:9f:6d:a7:2b brd ff:ff:ff:ff:ff:ff
+</span></span><span style="display:flex;"><span>    inet 192.168.1.101/32 scope global docker0
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span><span style="display:flex;"><span>    inet6 fe80::5c88:9fff:fe6d:a72b/64 scope link 
+</span></span><span style="display:flex;"><span>       valid_lft forever preferred_lft forever
+</span></span></code></pre></div><p>问题3: 更改 docker0 IP 地址的 scope 后，此时在机器上访问 192.168.0.2 时，MASQUERADE 选择的源 IP 是哪个？(10.0.10.13? 10.0.10.14? 192.168.1.101?)</p>
+<h2 id="代码分析">代码分析</h2>
+<p>MASQUERADE 在 NAT 表中注册的钩子函数</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#75715e"># net/netfilter/xt_MASQUERADE.c
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#66d9ef">static</span> <span style="color:#66d9ef">struct</span> xt_target masquerade_tg_reg[] __read_mostly <span style="color:#f92672">=</span> {
+</span></span><span style="display:flex;"><span>	{
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#if IS_ENABLED(CONFIG_IPV6)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		.name		<span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;MASQUERADE&#34;</span>,
+</span></span><span style="display:flex;"><span>		.family		<span style="color:#f92672">=</span> NFPROTO_IPV6,
+</span></span><span style="display:flex;"><span>		.target		<span style="color:#f92672">=</span> masquerade_tg6,
+</span></span><span style="display:flex;"><span>		.targetsize	<span style="color:#f92672">=</span> <span style="color:#66d9ef">sizeof</span>(<span style="color:#66d9ef">struct</span> nf_nat_range),
+</span></span><span style="display:flex;"><span>		.table		<span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;nat&#34;</span>,
+</span></span><span style="display:flex;"><span>		.hooks		<span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span> <span style="color:#f92672">&lt;&lt;</span> NF_INET_POST_ROUTING,
+</span></span><span style="display:flex;"><span>		.checkentry	<span style="color:#f92672">=</span> masquerade_tg6_checkentry,
+</span></span><span style="display:flex;"><span>		.destroy	<span style="color:#f92672">=</span> masquerade_tg_destroy,
+</span></span><span style="display:flex;"><span>		.me		<span style="color:#f92672">=</span> THIS_MODULE,
+</span></span><span style="display:flex;"><span>	}, {
+</span></span><span style="display:flex;"><span><span style="color:#75715e">#endif
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span>		.name		<span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;MASQUERADE&#34;</span>,
+</span></span><span style="display:flex;"><span>		.family		<span style="color:#f92672">=</span> NFPROTO_IPV4,
+</span></span><span style="display:flex;"><span>		.target		<span style="color:#f92672">=</span> masquerade_tg,
+</span></span><span style="display:flex;"><span>		.targetsize	<span style="color:#f92672">=</span> <span style="color:#66d9ef">sizeof</span>(<span style="color:#66d9ef">struct</span> nf_nat_ipv4_multi_range_compat),
+</span></span><span style="display:flex;"><span>		.table		<span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;nat&#34;</span>,
+</span></span><span style="display:flex;"><span>		.hooks		<span style="color:#f92672">=</span> <span style="color:#ae81ff">1</span> <span style="color:#f92672">&lt;&lt;</span> NF_INET_POST_ROUTING,
+</span></span><span style="display:flex;"><span>		.checkentry	<span style="color:#f92672">=</span> masquerade_tg_check,
+</span></span><span style="display:flex;"><span>		.destroy	<span style="color:#f92672">=</span> masquerade_tg_destroy,
+</span></span><span style="display:flex;"><span>		.me		<span style="color:#f92672">=</span> THIS_MODULE,
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>};
+</span></span></code></pre></div><p>masquerade_tg 函数</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">static</span> <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">masquerade_tg</span>(<span style="color:#66d9ef">struct</span> sk_buff <span style="color:#f92672">*</span>skb, <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> xt_action_param <span style="color:#f92672">*</span>par)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">struct</span> nf_nat_range2 range;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> nf_nat_ipv4_multi_range_compat <span style="color:#f92672">*</span>mr;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	mr <span style="color:#f92672">=</span> par<span style="color:#f92672">-&gt;</span>targinfo;
+</span></span><span style="display:flex;"><span>	range.flags <span style="color:#f92672">=</span> mr<span style="color:#f92672">-&gt;</span>range[<span style="color:#ae81ff">0</span>].flags;
+</span></span><span style="display:flex;"><span>	range.min_proto <span style="color:#f92672">=</span> mr<span style="color:#f92672">-&gt;</span>range[<span style="color:#ae81ff">0</span>].min;
+</span></span><span style="display:flex;"><span>	range.max_proto <span style="color:#f92672">=</span> mr<span style="color:#f92672">-&gt;</span>range[<span style="color:#ae81ff">0</span>].max;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> nf_nat_masquerade_ipv4(skb, xt_hooknum(par), <span style="color:#f92672">&amp;</span>range,
+</span></span><span style="display:flex;"><span>				      xt_out(par));
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>nf_nat_masquerade_ipv4 是核心函数，其中 MASQUERADE 选择源 IP 的逻辑就在其中：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span>
+</span></span><span style="display:flex;"><span><span style="color:#a6e22e">nf_nat_masquerade_ipv4</span>(<span style="color:#66d9ef">struct</span> sk_buff <span style="color:#f92672">*</span>skb, <span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">int</span> hooknum,
+</span></span><span style="display:flex;"><span>		       <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> nf_nat_range2 <span style="color:#f92672">*</span>range,
+</span></span><span style="display:flex;"><span>		       <span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> net_device <span style="color:#f92672">*</span>out)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">struct</span> nf_conn <span style="color:#f92672">*</span>ct;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">struct</span> nf_conn_nat <span style="color:#f92672">*</span>nat;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">enum</span> ip_conntrack_info ctinfo;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">struct</span> nf_nat_range2 newrange;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> rtable <span style="color:#f92672">*</span>rt;
+</span></span><span style="display:flex;"><span>	__be32 newsrc, nh;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	WARN_ON(hooknum <span style="color:#f92672">!=</span> NF_INET_POST_ROUTING);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	ct <span style="color:#f92672">=</span> nf_ct_get(skb, <span style="color:#f92672">&amp;</span>ctinfo);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	WARN_ON(<span style="color:#f92672">!</span>(ct <span style="color:#f92672">&amp;&amp;</span> (ctinfo <span style="color:#f92672">==</span> IP_CT_NEW <span style="color:#f92672">||</span> ctinfo <span style="color:#f92672">==</span> IP_CT_RELATED <span style="color:#f92672">||</span>
+</span></span><span style="display:flex;"><span>			 ctinfo <span style="color:#f92672">==</span> IP_CT_RELATED_REPLY)));
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* Source address is 0.0.0.0 - locally generated packet that is
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	 * probably not supposed to be masqueraded.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	 */</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> (ct<span style="color:#f92672">-&gt;</span>tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u3.ip <span style="color:#f92672">==</span> <span style="color:#ae81ff">0</span>)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> NF_ACCEPT;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>    <span style="color:#75715e">/* 获取路由 */</span>
+</span></span><span style="display:flex;"><span>	rt <span style="color:#f92672">=</span> skb_rtable(skb);
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* 获取下一跳地址 */</span>
+</span></span><span style="display:flex;"><span>	nh <span style="color:#f92672">=</span> rt_nexthop(rt, ip_hdr(skb)<span style="color:#f92672">-&gt;</span>daddr);
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* 选择源 IP */</span>
+</span></span><span style="display:flex;"><span>	newsrc <span style="color:#f92672">=</span> inet_select_addr(out, nh, RT_SCOPE_UNIVERSE);
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>newsrc) {
+</span></span><span style="display:flex;"><span>		pr_info(<span style="color:#e6db74">&#34;%s ate my IP address</span><span style="color:#ae81ff">\n</span><span style="color:#e6db74">&#34;</span>, out<span style="color:#f92672">-&gt;</span>name);
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">return</span> NF_DROP;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	nat <span style="color:#f92672">=</span> nf_ct_nat_ext_add(ct);
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> (nat)
+</span></span><span style="display:flex;"><span>		nat<span style="color:#f92672">-&gt;</span>masq_index <span style="color:#f92672">=</span> out<span style="color:#f92672">-&gt;</span>ifindex;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* Transfer from original range. */</span>
+</span></span><span style="display:flex;"><span>	memset(<span style="color:#f92672">&amp;</span>newrange.min_addr, <span style="color:#ae81ff">0</span>, <span style="color:#66d9ef">sizeof</span>(newrange.min_addr));
+</span></span><span style="display:flex;"><span>	memset(<span style="color:#f92672">&amp;</span>newrange.max_addr, <span style="color:#ae81ff">0</span>, <span style="color:#66d9ef">sizeof</span>(newrange.max_addr));
+</span></span><span style="display:flex;"><span>	newrange.flags       <span style="color:#f92672">=</span> range<span style="color:#f92672">-&gt;</span>flags <span style="color:#f92672">|</span> NF_NAT_RANGE_MAP_IPS;
+</span></span><span style="display:flex;"><span>	newrange.min_addr.ip <span style="color:#f92672">=</span> newsrc;
+</span></span><span style="display:flex;"><span>	newrange.max_addr.ip <span style="color:#f92672">=</span> newsrc;
+</span></span><span style="display:flex;"><span>	newrange.min_proto   <span style="color:#f92672">=</span> range<span style="color:#f92672">-&gt;</span>min_proto;
+</span></span><span style="display:flex;"><span>	newrange.max_proto   <span style="color:#f92672">=</span> range<span style="color:#f92672">-&gt;</span>max_proto;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* Hand modified range to generic setup. */</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> nf_nat_setup_info(ct, <span style="color:#f92672">&amp;</span>newrange, NF_NAT_MANIP_SRC);
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>链路如下：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>masquerade_tg
+</span></span><span style="display:flex;"><span>  -&gt; nf_nat_masquerade_ipv4<span style="color:#f92672">(</span>skb, xt_hooknum<span style="color:#f92672">(</span>par<span style="color:#f92672">)</span>, &amp;range,
+</span></span><span style="display:flex;"><span>                      xt_out<span style="color:#f92672">(</span>par<span style="color:#f92672">))</span>
+</span></span><span style="display:flex;"><span>    -&gt; inet_select_addr<span style="color:#f92672">(</span>out, nh, RT_SCOPE_UNIVERSE<span style="color:#f92672">)</span>
+</span></span></code></pre></div><p>重点来看 inet_select_addr 如何选择源 IP：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-c" data-lang="c"><span style="display:flex;"><span><span style="color:#75715e">/* 入参:
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">    net_device: 出口设备
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">    dst: 下一跳地址
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">    scope: 0 (RT_SCOPE_UNIVERSE)
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">    enum rt_scope_t {
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	   RT_SCOPE_UNIVERSE=0,
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">      /* User defined values  */</span>
+</span></span><span style="display:flex;"><span>	   RT_SCOPE_SITE<span style="color:#f92672">=</span><span style="color:#ae81ff">200</span>,
+</span></span><span style="display:flex;"><span>	   RT_SCOPE_LINK<span style="color:#f92672">=</span><span style="color:#ae81ff">253</span>,
+</span></span><span style="display:flex;"><span>	   RT_SCOPE_HOST<span style="color:#f92672">=</span><span style="color:#ae81ff">254</span>,
+</span></span><span style="display:flex;"><span>	   RT_SCOPE_NOWHERE<span style="color:#f92672">=</span><span style="color:#ae81ff">255</span>
+</span></span><span style="display:flex;"><span>    };
+</span></span><span style="display:flex;"><span>    scope <span style="color:#960050;background-color:#1e0010">详细见</span><span style="color:#f92672">:</span> http:<span style="color:#75715e">//www.embeddedlinux.org.cn/linux_net/0596002556/understandlni-CHP-30-SECT-2.html#understandlni-CHP-30-SECT-2.1
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"></span><span style="color:#960050;background-color:#1e0010">*/</span>
+</span></span><span style="display:flex;"><span>__be32 inet_select_addr(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> net_device <span style="color:#f92672">*</span>dev, __be32 dst, <span style="color:#66d9ef">int</span> scope)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> in_ifaddr <span style="color:#f92672">*</span>ifa;
+</span></span><span style="display:flex;"><span>	__be32 addr <span style="color:#f92672">=</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">unsigned</span> <span style="color:#66d9ef">char</span> localnet_scope <span style="color:#f92672">=</span> RT_SCOPE_HOST;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">struct</span> in_device <span style="color:#f92672">*</span>in_dev;
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">struct</span> net <span style="color:#f92672">*</span>net <span style="color:#f92672">=</span> dev_net(dev);
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">int</span> master_idx;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	rcu_read_lock();
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* 获取出口设备上的所有地址 */</span>
+</span></span><span style="display:flex;"><span>	in_dev <span style="color:#f92672">=</span> __in_dev_get_rcu(dev);
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>in_dev)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">goto</span> no_in_dev;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> (unlikely(IN_DEV_ROUTE_LOCALNET(in_dev)))
+</span></span><span style="display:flex;"><span>		localnet_scope <span style="color:#f92672">=</span> RT_SCOPE_LINK;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	in_dev_for_each_ifa_rcu(ifa, in_dev) {
+</span></span><span style="display:flex;"><span>	   <span style="color:#75715e">/* 只关心设备上的主地址 */</span>
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (ifa<span style="color:#f92672">-&gt;</span>ifa_flags <span style="color:#f92672">&amp;</span> IFA_F_SECONDARY)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">continue</span>;
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">/* 对比 scope，注意入参 scope 为 0 */</span>
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (min(ifa<span style="color:#f92672">-&gt;</span>ifa_scope, localnet_scope) <span style="color:#f92672">&gt;</span> scope)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">continue</span>;
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">/* 如果 dst 不为空，判断 dst 和 设备上的地址是否在一个网段 */</span>
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>dst <span style="color:#f92672">||</span> inet_ifa_match(dst, ifa)) {
+</span></span><span style="display:flex;"><span>			addr <span style="color:#f92672">=</span> ifa<span style="color:#f92672">-&gt;</span>ifa_local;
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">break</span>;
+</span></span><span style="display:flex;"><span>		}
+</span></span><span style="display:flex;"><span>		<span style="color:#75715e">/* 找到地址 */</span>
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>addr)
+</span></span><span style="display:flex;"><span>			addr <span style="color:#f92672">=</span> ifa<span style="color:#f92672">-&gt;</span>ifa_local;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> (addr)
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">goto</span> out_unlock;
+</span></span><span style="display:flex;"><span><span style="color:#75715e">/* 上面的逻辑如果没有找到合适的地址，这里会先尝试找出口设备的 master device，再遍历每一个设备*/</span>
+</span></span><span style="display:flex;"><span>no_in_dev:
+</span></span><span style="display:flex;"><span>	master_idx <span style="color:#f92672">=</span> l3mdev_master_ifindex_rcu(dev);
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* For VRFs, the VRF device takes the place of the loopback device,
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	 * with addresses on it being preferred.  Note in such cases the
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	 * loopback device will be among the devices that fail the master_idx
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	 * equality check in the loop below.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	 */</span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">if</span> (master_idx <span style="color:#f92672">&amp;&amp;</span>
+</span></span><span style="display:flex;"><span>	    (dev <span style="color:#f92672">=</span> dev_get_by_index_rcu(net, master_idx)) <span style="color:#f92672">&amp;&amp;</span>
+</span></span><span style="display:flex;"><span>	    (in_dev <span style="color:#f92672">=</span> __in_dev_get_rcu(dev))) {
+</span></span><span style="display:flex;"><span>		addr <span style="color:#f92672">=</span> in_dev_select_addr(in_dev, scope);
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (addr)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">goto</span> out_unlock;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#75715e">/* Not loopback addresses on loopback should be preferred
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	   in this case. It is important that lo is the first interface
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	   in dev_base list.
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e">	 */</span>
+</span></span><span style="display:flex;"><span>	 <span style="color:#75715e">/* 遍历所有设备 */</span>
+</span></span><span style="display:flex;"><span>	for_each_netdev_rcu(net, dev) {
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (l3mdev_master_ifindex_rcu(dev) <span style="color:#f92672">!=</span> master_idx)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">continue</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		in_dev <span style="color:#f92672">=</span> __in_dev_get_rcu(dev);
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (<span style="color:#f92672">!</span>in_dev)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">continue</span>;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>		addr <span style="color:#f92672">=</span> in_dev_select_addr(in_dev, scope);
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (addr)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">goto</span> out_unlock;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>out_unlock:
+</span></span><span style="display:flex;"><span>	rcu_read_unlock();
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> addr;
+</span></span><span style="display:flex;"><span>}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">static</span> __be32 in_dev_select_addr(<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> in_device <span style="color:#f92672">*</span>in_dev,
+</span></span><span style="display:flex;"><span>				 <span style="color:#66d9ef">int</span> scope)
+</span></span><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">const</span> <span style="color:#66d9ef">struct</span> in_ifaddr <span style="color:#f92672">*</span>ifa;
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	in_dev_for_each_ifa_rcu(ifa, in_dev) {
+</span></span><span style="display:flex;"><span>	   <span style="color:#75715e">/* 只关系主设备 */</span>
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (ifa<span style="color:#f92672">-&gt;</span>ifa_flags <span style="color:#f92672">&amp;</span> IFA_F_SECONDARY)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">continue</span>;
+</span></span><span style="display:flex;"><span>		<span style="color:#66d9ef">if</span> (ifa<span style="color:#f92672">-&gt;</span>ifa_scope <span style="color:#f92672">!=</span> RT_SCOPE_LINK <span style="color:#f92672">&amp;&amp;</span>
+</span></span><span style="display:flex;"><span>		    ifa<span style="color:#f92672">-&gt;</span>ifa_scope <span style="color:#f92672">&lt;=</span> scope)
+</span></span><span style="display:flex;"><span>			<span style="color:#66d9ef">return</span> ifa<span style="color:#f92672">-&gt;</span>ifa_local;
+</span></span><span style="display:flex;"><span>	}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>	<span style="color:#66d9ef">return</span> <span style="color:#ae81ff">0</span>;
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>MASQUERADE 选择源 IP 的逻辑我们已经看完了，现在来回答上面提的三个问题：</p>
+<blockquote>
+<p>问题1: 在机器上访问 10.0.10.15 时，MASQUERADE 选择的源 IP 是哪个？(10.0.10.13? 10.0.10.14? 192.168.1.101?)</p>
+</blockquote>
+<p>答: 10.0.10.13，访问 10.0.10.15 会匹配第二条路由，出口设备为 eth0，选择 eth0 上主地址 10.0.10.13</p>
+<blockquote>
+<p>问题2: 在机器上访问 192.168.0.2 时，MASQUERADE 选择的源 IP 是哪个？(10.0.10.13? 10.0.10.14? 192.168.1.101?)</p>
+</blockquote>
+<p>答: 10.0.10.13，访问 192.168.0.2 时会匹配 <code>192.168.0.0/24 via 192.168.1.101 dev docker0 src 192.168.1.101</code> 路由，出口设备为 docker0，但是因为 docker0 IP address scope 为 link，不满足 <code>if (min(ifa-&gt;ifa_scope, localnet_scope) &gt; scope)</code> 条件，被过滤掉，从而会触发后面选择主设备的逻辑，选到 eth0 的主地址</p>
+<blockquote>
+<p>问题3: 更改 docker0 IP 地址的 scope 后，此时在机器上访问 192.168.0.2 时，MASQUERADE 选择的源 IP 是哪个？(10.0.10.13? 10.0.10.14? 192.168.1.101?)</p>
+</blockquote>
+<p>答: 192.168.1.101，访问 192.168.0.2 时会匹配 <code>192.168.0.0/24 via 192.168.1.101 dev docker0 src 192.168.1.101</code> 路由，出口设备为 docker0，但是因为 docker0 IP address scope 为 global，满足 <code>if (min(ifa-&gt;ifa_scope, localnet_scope) &gt; scope)</code> 条件</p>
+]]></content>
+        </item>
+        
+    </channel>
+</rss>
